@@ -36,7 +36,7 @@ export async function POST(req: Request) {
   const sourcePdf = await prisma.sourcePdf.create({
     data: {
       fileName,
-      filePath: `../upload/${fileName}`,
+      filePath: `/uploads/${fileName}`,
     },
   })
 
