@@ -1,4 +1,5 @@
 import { mkdir, writeFile } from "fs/promises";
+import { prisma } from "@/lib/prisma";
 import path from "path";
 
 function safeFileName(name: string) {
@@ -32,8 +33,16 @@ export async function POST(req: Request) {
 
   await writeFile(filePath, buffer);
 
+  const sourcePdf = await prisma.sourcePdf.create({
+    data: {
+      fileName,
+      filePath: `../upload/${fileName}`,
+    },
+  })
+
   return Response.json({
     success: true,
     file: `/uploads/${fileName}`,
+    sourcePdfId: sourcePdf.id,
   });
 }

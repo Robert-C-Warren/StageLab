@@ -1,0 +1,45 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model SourcePdf {
+  id        String   @id @default(cuid())
+  fileName  String
+  filePath  String
+  pageCount Int?
+  createdAt DateTime @default(now())
+
+  pages  PdfPage[]
+  stages StageCard[]
+}
+
+model PdfPage {
+  id          String  @id @default(cuid())
+  sourcePdfId String
+  pageNumber  Int
+  imagePath   String?
+
+  sourcePdf SourcePdf @relation(fields: [sourcePdfId], references: [id], onDelete: Cascade)
+
+  @@unique([sourcePdfId, pageNumber])
+}
+
+model StageCard {
+  id          String   @id @default(cuid())
+  sourcePdfId String
+  name        String?
+  pageNumber  Int
+  cropX       Float
+  cropY       Float
+  cropWidth   Float
+  cropHeight  Float
+  imagePath   String?
+  createdAt   DateTime @default(now())
+
+  sourcePdf SourcePdf @relation(fields: [sourcePdfId], references: [id], onDelete: Cascade)
+}
