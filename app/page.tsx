@@ -2,6 +2,19 @@
 
 import { useEffect, useRef, useState } from "react";
 
+type StageCard = {
+	id: string;
+	sourcePdfId: string;
+	name: string | null;
+	pageNumber: number;
+	cropX: number;
+	cropY: number;
+	cropWidth: number;
+	cropHeight: number;
+	imagePath: string | null;
+	createdAt: string; // comes back as ISO string from API
+};
+
 export default function Home() {
 	const [fileUrl, setFileUrl] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -11,9 +24,12 @@ export default function Home() {
 	const [isDragging, setIsDragging] = useState(false);
 	const [start, setStart] = useState<{ x: number; y: number } | null>(null);
 	const [end, setEnd] = useState<{ x: number; y: number } | null>(null);
-  	const pageCountSavedRef = useRef(false);
+	const [stageCards, setStageCards] = useState<StageCard[]>([]);
+
+	const pageCountSavedRef = useRef(false);
 	const canvasRef = useRef<HTMLCanvasElement>(null);
 	const snapshotRef = useRef<ImageData | null>(null);
+	const renderTaskRef = useRef<{ cancel: () => void } | null>(null);
 
 	const handleUpload: React.SubmitEventHandler<HTMLFormElement> = async (e) => {
 		e.preventDefault();
@@ -34,6 +50,7 @@ export default function Home() {
 			return;
 		}
 
+		pageCountSavedRef.current = false;
 		setFileUrl(data.file);
 		setSourcePdfId(data.sourcePdfId);
 		setPageNumber(1);
@@ -81,22 +98,55 @@ export default function Home() {
 			canvas.width = Math.ceil(viewport.width);
 			canvas.height = Math.ceil(viewport.height);
 
-			await page.render({
+			renderTaskRef.current?.cancel();
+
+			const renderTask = page.render({
 				canvas,
 				canvasContext: context,
 				viewport,
-			}).promise;
+			});
 
-			// SNAPSHOT (critical)
+			renderTaskRef.current = renderTask;
+
+			try {
+				await renderTask.promise;
+			} catch (err) {
+				if (err instanceof Error && err.name === "RenderingCancelledException") {
+					return;
+				}
+
+				throw err;
+			}
+
+			if (cancelled) return;
+
 			snapshotRef.current = context.getImageData(0, 0, canvas.width, canvas.height);
+
+			if (renderTaskRef.current === renderTask) {
+				renderTaskRef.current = null;
+			}
 		}
 
 		loadPdfPage();
 
 		return () => {
 			cancelled = true;
+			renderTaskRef.current?.cancel();
+			renderTaskRef.current = null;
 		};
 	}, [fileUrl, pageNumber, sourcePdfId]);
+
+	useEffect(() => {
+		if (!sourcePdfId) return;
+
+		async function loadStageCards() {
+			const res = await fetch(`/api/stage-cards?sourcePdfId=${sourcePdfId}`);
+			const data: StageCard[] = await res.json();
+			setStageCards(data);
+		}
+
+		loadStageCards();
+	}, [sourcePdfId]);
 
 	useEffect(() => {
 		if (!start || !end) return;
@@ -186,6 +236,8 @@ export default function Home() {
 					if (!start || !end || !canvasRef.current) return;
 
 					const canvas = canvasRef.current;
+					const res = await fetch(`/api/stage-cards?sourcePdfId=${sourcePdfId}`);
+					const data = await res.json();
 
 					const x = Math.min(start.x, end.x);
 					const y = Math.min(start.y, end.y);
@@ -193,6 +245,23 @@ export default function Home() {
 					const h = Math.abs(start.y - end.y);
 
 					if (w < 5 || h < 5) return;
+
+					const cropCanvas = document.createElement("canvas");
+					cropCanvas.width = w;
+					cropCanvas.height = h;
+
+					const cropContext = cropCanvas.getContext("2d");
+					if (!cropContext) return;
+
+					cropContext.drawImage(canvas, x, y, w, h, 0, 0, w, h);
+
+					const blob = await new Promise<Blob | null>((resolve) => {
+						cropCanvas.toBlob(resolve, "image/png");
+					});
+
+					if (!blob) return;
+
+					setStageCards(data);
 
 					const normalized = {
 						cropX: x / canvas.width,
@@ -203,20 +272,44 @@ export default function Home() {
 
 					if (!sourcePdfId) return;
 
+					const formData = new FormData();
+
+					formData.append("sourcePdfId", sourcePdfId);
+					formData.append("pageNumber", String(pageNumber));
+					formData.append("cropX", String(normalized.cropX));
+					formData.append("cropY", String(normalized.cropY));
+					formData.append("cropWidth", String(normalized.cropWidth));
+					formData.append("cropHeight", String(normalized.cropHeight));
+					formData.append("image", blob, `stage-${Date.now()}.png`);
+
 					await fetch("/api/stage-cards", {
 						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({
-							sourcePdfId,
-							pageNumber,
-							...normalized,
-						}),
+						body: formData,
 					});
 
 					setStart(null);
 					setEnd(null);
 				}}
 			/>
+
+			{stageCards.length > 0 && (
+				<div className="space-y-2">
+					<h2 className="text-sm font-bold">Stage Cards</h2>
+
+					{stageCards.map((stage, i) => (
+						<div key={stage.id} className="border p-2 text-xs">
+							<div>#{i + 1}</div>
+							<div>Page: {stage.pageNumber}</div>
+							<div>
+								Crop: {stage.cropX.toFixed(2)}, {stage.cropY.toFixed(2)}
+							</div>
+							{stage.imagePath && (
+								<img src={stage.imagePath} alt={`Stage card ${i + 1}`} className="w-48 border" />
+							)}
+						</div>
+					))}
+				</div>
+			)}
 		</main>
 	);
 }
