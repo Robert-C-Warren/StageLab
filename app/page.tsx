@@ -64,16 +64,6 @@ export default function Home() {
 
 			setPageCount(pdf.numPages);
 
-      if (sourcePdfId && !pageCountSavedRef.current) {
-        await fetch(`/api/source-pdf/${sourcePdfId}/page-count`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json"},
-          body: JSON.stringify({ pageCount: pdf.numPages }),
-        });
-
-        pageCountSavedRef.current = true;
-      }
-
 			if (sourcePdfId && !pageCountSavedRef.current) {
 				pageCountSavedRef.current = true;
 
@@ -190,7 +180,7 @@ export default function Home() {
 						y: e.clientY - rect.top,
 					});
 				}}
-				onMouseUp={() => {
+				onMouseUp={async () => {
 					setIsDragging(false);
 
 					if (!start || !end || !canvasRef.current) return;
@@ -211,7 +201,17 @@ export default function Home() {
 						cropHeight: h / canvas.height,
 					};
 
-					console.log("FINAL CROP:", normalized);
+					if (!sourcePdfId) return;
+
+					await fetch("/api/stage-cards", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							sourcePdfId,
+							pageNumber,
+							...normalized,
+						}),
+					});
 
 					setStart(null);
 					setEnd(null);
