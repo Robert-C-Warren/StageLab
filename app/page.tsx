@@ -8,7 +8,12 @@ export default function Home() {
 	const [pageNumber, setPageNumber] = useState(1);
 	const [pageCount, setPageCount] = useState<number | null>(null);
 	const [sourcePdfId, setSourcePdfId] = useState<string | null>(null);
+	const [isDragging, setIsDragging] = useState(false);
+	const [start, setStart] = useState<{ x: number; y: number } | null>(null);
+	const [end, setEnd] = useState<{ x: number; y: number } | null>(null);
+  	const pageCountSavedRef = useRef(false);
 	const canvasRef = useRef<HTMLCanvasElement>(null);
+	const snapshotRef = useRef<ImageData | null>(null);
 
 	const handleUpload: React.SubmitEventHandler<HTMLFormElement> = async (e) => {
 		e.preventDefault();
@@ -39,11 +44,12 @@ export default function Home() {
 		if (!fileUrl) return;
 
 		let cancelled = false;
-		const pdfUrl = fileUrl;
 
 		async function loadPdfPage() {
 			const canvas = canvasRef.current;
-			if (!canvas) return;
+			const pdfUrl = fileUrl;
+
+			if (!canvas || !pdfUrl) return;
 
 			const context = canvas.getContext("2d");
 			if (!context) return;
@@ -52,53 +58,81 @@ export default function Home() {
 
 			pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.mjs", import.meta.url).toString();
 
-			const loadingTask = pdfjsLib.getDocument(pdfUrl);
-			const pdf = await loadingTask.promise;
+			const pdf = await pdfjsLib.getDocument(pdfUrl).promise;
 
 			if (cancelled) return;
 
 			setPageCount(pdf.numPages);
 
-			if (sourcePdfId) {
+      if (sourcePdfId && !pageCountSavedRef.current) {
+        await fetch(`/api/source-pdf/${sourcePdfId}/page-count`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json"},
+          body: JSON.stringify({ pageCount: pdf.numPages }),
+        });
+
+        pageCountSavedRef.current = true;
+      }
+
+			if (sourcePdfId && !pageCountSavedRef.current) {
+				pageCountSavedRef.current = true;
+
 				await fetch(`/api/source-pdf/${sourcePdfId}/page-count`, {
 					method: "PATCH",
-					headers: {
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify({
-						pageCount: pdf.numPages,
-					}),
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ pageCount: pdf.numPages }),
 				});
 			}
 
-			const safePageNumber = Math.min(Math.max(pageNumber, 1), pdf.numPages);
-			const page = await pdf.getPage(safePageNumber);
-
-			if (cancelled) return;
+			const page = await pdf.getPage(pageNumber);
 
 			const viewport = page.getViewport({ scale: 1.5 });
 
 			canvas.width = Math.ceil(viewport.width);
 			canvas.height = Math.ceil(viewport.height);
 
-			const renderTask = page.render({
+			await page.render({
 				canvas,
 				canvasContext: context,
 				viewport,
-			});
+			}).promise;
 
-			await renderTask.promise;
+			// SNAPSHOT (critical)
+			snapshotRef.current = context.getImageData(0, 0, canvas.width, canvas.height);
 		}
 
-		loadPdfPage().catch((err) => {
-			console.error(err);
-			setError("PDF render failed");
-		});
+		loadPdfPage();
 
 		return () => {
 			cancelled = true;
 		};
 	}, [fileUrl, pageNumber, sourcePdfId]);
+
+	useEffect(() => {
+		if (!start || !end) return;
+
+		const canvas = canvasRef.current;
+		if (!canvas) return;
+
+		const context = canvas.getContext("2d");
+		if (!context) return;
+
+		const snapshot = snapshotRef.current;
+		if (!snapshot) return;
+
+		// restore clean PDF
+		context.putImageData(snapshot, 0, 0);
+
+		const x = Math.min(start.x, end.x);
+		const y = Math.min(start.y, end.y);
+		const w = Math.abs(start.x - end.x);
+		const h = Math.abs(start.y - end.y);
+
+		context.strokeStyle = "red";
+		context.lineWidth = 2;
+
+		context.strokeRect(x, y, w, h);
+	}, [start, end]);
 
 	const canGoPrev = pageNumber > 1;
 	const canGoNext = pageCount !== null && pageNumber < pageCount;
@@ -135,7 +169,54 @@ export default function Home() {
 				</div>
 			)}
 
-			<canvas ref={canvasRef} className="border" />
+			<canvas
+				ref={canvasRef}
+				className="border"
+				onMouseDown={(e) => {
+					const rect = e.currentTarget.getBoundingClientRect();
+					setStart({
+						x: e.clientX - rect.left,
+						y: e.clientY - rect.top,
+					});
+					setEnd(null);
+					setIsDragging(true);
+				}}
+				onMouseMove={(e) => {
+					if (!isDragging || !start) return;
+
+					const rect = e.currentTarget.getBoundingClientRect();
+					setEnd({
+						x: e.clientX - rect.left,
+						y: e.clientY - rect.top,
+					});
+				}}
+				onMouseUp={() => {
+					setIsDragging(false);
+
+					if (!start || !end || !canvasRef.current) return;
+
+					const canvas = canvasRef.current;
+
+					const x = Math.min(start.x, end.x);
+					const y = Math.min(start.y, end.y);
+					const w = Math.abs(start.x - end.x);
+					const h = Math.abs(start.y - end.y);
+
+					if (w < 5 || h < 5) return;
+
+					const normalized = {
+						cropX: x / canvas.width,
+						cropY: y / canvas.height,
+						cropWidth: w / canvas.width,
+						cropHeight: h / canvas.height,
+					};
+
+					console.log("FINAL CROP:", normalized);
+
+					setStart(null);
+					setEnd(null);
+				}}
+			/>
 		</main>
 	);
 }
