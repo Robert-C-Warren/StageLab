@@ -1,39 +1,103 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="stylesheet" href="styles.css" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tauri App</title>
-    <script type="module" src="/main.js" defer></script>
-  </head>
+<html>
+	<head>
+		<meta charset="UTF-8" />
+		<title>StageLab - Rally Recon Tool</title>
+		<link rel="stylesheet" href="/leaflet/dist/leaflet.css" />
+		<style>
+			body {
+				font-family: Arial, sans-serif;
+				margin: 0;
+				padding: 20px;
+				background: #f5f5f5;
+			}
+			.header {
+				background: #2c3e50;
+				color: white;
+				padding: 15px 20px;
+				margin-bottom: 20px;
+			}
+			.header h1 {
+				margin: 0;
+				font-size: 1.5em;
+			}
+			.container {
+				display: grid;
+				grid-template-columns: 1fr 1fr;
+				gap: 20px;
+			}
+			.panel {
+				background: white;
+				border-radius: 8px;
+				padding: 15px;
+				box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+			}
+			.panel h2 {
+				color: #2c3e50;
+				margin-top: 0;
+			}
+			#map {
+				height: 400px;
+				width: 100%;
+				border-radius: 4px;
+			}
+			video {
+				width: 100%;
+				background: #000;
+				border-radius: 4px;
+			}
+			button {
+				padding: 10px 15px;
+				margin: 5px;
+				cursor: pointer;
+				background: #3498db;
+				color: white;
+				border: none;
+				border-radius: 4px;
+			}
+			button:hover {
+				background: #2980b9;
+			}
+			.status {
+				margin-top: 20px;
+				padding: 10px;
+				background: #ecf0f1;
+				border-radius: 4px;
+				font-size: 0.9em;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="header">
+			<h1>StageLab - Rally Recce Tool</h1>
+		</div>
 
-  <body>
-    <main class="container">
-      <h1>Welcome to Tauri</h1>
+		<div class="container">
+			<div class="panel">
+				<h2>Video Player</h2>
+				<button id="openVideoBtn">Open Video File</button>
+				<video id="recceVideo" controls></video>
+				<div class="status" id="videoStatus">No video loaded</div>
+			</div>
 
-      <div class="row">
-        <a href="https://tauri.app" target="_blank">
-          <img src="/assets/tauri.svg" class="logo tauri" alt="Tauri logo" />
-        </a>
-        <a
-          href="https://developer.mozilla.org/en-US/docs/Web/JavaScript"
-          target="_blank"
-        >
-          <img
-            src="/assets/javascript.svg"
-            class="logo vanilla"
-            alt="JavaScript logo"
-          />
-        </a>
-      </div>
-      <p>Click on the Tauri logo to learn more about the framework</p>
+			<div class="panel">
+				<h2>Stage Map</h2>
+				<div id="map"></div>
+				<div class="status" id="mapStatus">Map ready</div>
+			</div>
+		</div>
 
-      <form class="row" id="greet-form">
-        <input id="greet-input" placeholder="Enter a name..." />
-        <button type="submit">Greet</button>
-      </form>
-      <p id="greet-msg"></p>
-    </main>
-  </body>
+		<script src="/leaflet/dist/leaflet.js"></script>
+
+		<script>
+			// Initialize map
+			const map = L.map("map").setView([51.505, -0.09], 13);
+			L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+				attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+			}).addTo(map);
+
+      // Open video
+      document.getElementById
+		</script>
+	</body>
 </html>
