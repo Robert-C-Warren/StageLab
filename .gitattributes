@@ -1,0 +1,2 @@
+legacy/node_modules/** filter=lfs diff=lfs merge=lfs -text
+legacy/** filter=lfs diff=lfs merge=lfs -text

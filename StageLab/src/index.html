@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>StageLab</title>
+  <style>
+    #recceVideo { width: 640px; height: 360px; background: #000; }
+  </style>
+</head>
+<body>
+  <button id="openVideoBtn">Open Video File</button>
+  <video id="recceVideo" controls></video>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log("DOM loaded. Setting up event listeners...");
+
+      async function openVideoFile() {
+        try {
+          console.log("Invoking Rust command: open_video_file");
+          const path = await window.__TAURI__.core.invoke("open_video_file");
+          console.log("Rust returned path:", path);
+
+          if (path) {
+            const video = document.getElementById("recceVideo");
+            if (!video) {
+              console.error("Video element not found!");
+              return;
+            }
+
+            // Convert the filesystem path to a tauri:// URL
+            const tauriPath = window.__TAURI__.core.convertFileSrc(path);
+            console.log("Converted to Tauri URL:", tauriPath);
+
+            video.src = tauriPath;
+            video.load();
+            console.log("Video src set to:", video.src);
+          } else {
+            console.log("No path selected (user canceled).");
+          }
+        } catch (error) {
+          console.error("Error in openVideoFile:", error);
+        }
+      }
+
+      const openVideoBtn = document.getElementById("openVideoBtn");
+      if (openVideoBtn) {
+        openVideoBtn.addEventListener("click", openVideoFile);
+        console.log("Event listener added to button.");
+      } else {
+        console.error("Button 'openVideoBtn' not found!");
+      }
+    });
+  </script>
+</body>
+</html>
